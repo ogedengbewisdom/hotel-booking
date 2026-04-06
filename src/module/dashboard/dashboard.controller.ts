@@ -63,5 +63,11 @@ export class DashboardController {
   async getHotelOverview(
     @Param('id', TransformParamsPipe) id: number,
     @Query() query: IDashboardQuery,
-  ) {}
+  ) {
+    const data = await this.dashboardService.getHotelOverview(id, query);
+    return {
+      message: 'Hotel overview fetched successfully',
+      data,
+    };
+  }
 }
