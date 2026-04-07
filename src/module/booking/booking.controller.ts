@@ -186,7 +186,10 @@ export class BookingController {
     );
     return {
       message: 'Booking cancelled successfully',
-      data: booking,
+      data: {
+        booking_id: booking.id,
+        status: booking.status,
+      },
     };
   }
 
