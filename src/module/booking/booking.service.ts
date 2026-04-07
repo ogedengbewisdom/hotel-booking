@@ -7,7 +7,6 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { CreateBookingDto } from './dto/create-booking.dto';
-import { UpdateBookingDto } from './dto/update-booking.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Booking } from './entities/booking.entity';
 import {
@@ -25,6 +24,9 @@ import { BookedRoom } from '../booked_rooms/entities/booked_room.entity';
 import { BookingStatus } from './enums/booking-status';
 import { convert_to_naira } from '../../util/lib';
 import type { IBookingQuery } from '../../common/interface/hotel.query';
+import { UserRole } from '../users/enums/user-role';
+import { ReasonDto } from './dto/reason.dto';
+import { FeedbackDto } from './dto/feedback.dto';
 
 @Injectable()
 export class BookingService {
@@ -336,5 +338,109 @@ export class BookingService {
       ...(payment && { payment_amount: convert_to_naira(payment.amount) }),
       ...(payment && { payment_status: payment.status }),
     };
+  }
+
+  async cancel_booking(id: number, user_id: number, user_role: UserRole) {
+    const booking = await this.booking_repository.findOne({
+      where: { id },
+    });
+    if (!booking) throw new NotFoundException('Booking not found');
+
+    const is_authorized =
+      user_role === UserRole.ADMIN || booking.user_id === user_id;
+
+    if (!is_authorized)
+      throw new ForbiddenException(
+        'You are not authorized to cancel this booking',
+      );
+
+    if (booking.status === BookingStatus.CANCELLED)
+      throw new BadRequestException('Booking is already cancelled');
+
+    if (booking.status === BookingStatus.CONFIRMED)
+      throw new BadRequestException(
+        'Confirmed booking cannot be cancelled directly, please contact support',
+      );
+
+    booking.status = BookingStatus.CANCELLED;
+    await this.booking_repository.save(booking);
+    return booking;
+  }
+
+  async abandon_booking(
+    id: number,
+    user_id: number,
+    user_role: UserRole,
+    reason_dto: ReasonDto,
+  ) {
+    const { abandoned_reason } = reason_dto;
+    const booking = await this.booking_repository.findOne({
+      where: { id },
+    });
+    if (!booking) throw new NotFoundException('Booking not found');
+
+    const is_authorized =
+      user_role === UserRole.ADMIN || booking.user_id === user_id;
+    if (!is_authorized)
+      throw new ForbiddenException(
+        'You are not authorized to abandon this booking',
+      );
+
+    if (booking.status === BookingStatus.ABANDONED)
+      throw new BadRequestException('Booking is already abandoned');
+
+    if (booking.status === BookingStatus.CANCELLED)
+      throw new BadRequestException('Cancelled booking cannot be abandoned');
+
+    if (booking.status === BookingStatus.CONFIRMED)
+      throw new BadRequestException('Confirmed booking cannot be abandoned');
+
+    try {
+      await this.booking_repository.update(id, {
+        status: BookingStatus.ABANDONED,
+        abandoned_reason,
+      });
+
+      return await this.findOne(id);
+    } catch (error) {
+      throw new InternalServerErrorException(
+        error?.message || 'Failed to abandon booking',
+      );
+    }
+  }
+
+  async feedback_booking(
+    id: number,
+    user_id: number,
+    user_role: UserRole,
+    feedback_dto: FeedbackDto,
+  ) {
+    const { feedback } = feedback_dto;
+    const booking = await this.booking_repository.findOne({
+      where: { id },
+    });
+    if (!booking) throw new NotFoundException('Booking not found');
+    const is_authorized =
+      user_role === UserRole.ADMIN || booking.user_id === user_id;
+    if (!is_authorized)
+      throw new ForbiddenException(
+        'You are not authorized to feedback on this booking',
+      );
+
+    const is_feedbacked = booking.feedback !== null;
+    if (is_feedbacked)
+      throw new BadRequestException('Booking is already feedbacked');
+
+    try {
+      await this.booking_repository.update(id, {
+        feedback,
+      });
+
+      return await this.findOne(id);
+    } catch (error) {
+      throw new InternalServerErrorException(
+        error?.message || 'Failed to feedback booking',
+      );
+    }
   }
 }

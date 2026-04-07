@@ -28,6 +28,8 @@ import { RoleGuard } from '../../common/guard/role-guard/role.guard';
 import { UserRole } from '../users/enums/user-role';
 import { Roles } from '../../common/decorator/roles.decorator';
 import type { IBookingQuery } from '../../common/interface/hotel.query';
+import { FeedbackDto } from './dto/feedback.dto';
+import { ReasonDto } from './dto/reason.dto';
 
 @Controller({ path: 'booking', version: '1' })
 @ApiTags('Booking')
@@ -164,6 +166,80 @@ export class BookingController {
     return {
       message: 'Booking fetched successfully',
       data: booking,
+    };
+  }
+
+  @ApiOperation({ summary: 'Cancel a booking' })
+  @ApiParam({ name: 'id', description: 'The booking ID', type: Number })
+  @ApiResponse({ status: 200, description: 'Success' })
+  @Delete(':id')
+  async cancelBooking(
+    @Param('id', TransformParamsPipe) id: number,
+    @Request() req,
+  ) {
+    const user_id = Number(req.user?.sub);
+    const user_role = req.user?.role as UserRole;
+    const booking = await this.bookingService.cancel_booking(
+      id,
+      user_id,
+      user_role,
+    );
+    return {
+      message: 'Booking cancelled successfully',
+      data: booking,
+    };
+  }
+
+  @ApiOperation({ summary: 'Abandon a booking' })
+  @ApiParam({ name: 'id', description: 'The booking ID', type: Number })
+  @ApiResponse({ status: 200, description: 'Success' })
+  @Delete(':id/abandon')
+  async abandonBooking(
+    @Param('id', TransformParamsPipe) id: number,
+    @Request() req,
+    @Body() reason_dto: ReasonDto,
+  ) {
+    const user_id = Number(req.user?.sub);
+    const user_role = req.user?.role as UserRole;
+    const booking = await this.bookingService.abandon_booking(
+      id,
+      user_id,
+      user_role,
+      reason_dto,
+    );
+    return {
+      message: 'Booking abandoned successfully',
+      data: {
+        booking_id: booking.id,
+        abandoned_reason: booking.abandoned_reason,
+        status: booking.status,
+      },
+    };
+  }
+
+  @ApiOperation({ summary: 'Feedback a booking' })
+  @ApiParam({ name: 'id', description: 'The booking ID', type: Number })
+  @ApiResponse({ status: 200, description: 'Success' })
+  @Post(':id/feedback')
+  async feedbackBooking(
+    @Param('id', TransformParamsPipe) id: number,
+    @Request() req,
+    @Body() feedback_dto: FeedbackDto,
+  ) {
+    const user_id = Number(req.user?.sub);
+    const user_role = req.user?.role as UserRole;
+    const booking = await this.bookingService.feedback_booking(
+      id,
+      user_id,
+      user_role,
+      feedback_dto,
+    );
+    return {
+      message: 'Booking feedbacked successfully',
+      data: {
+        booking_id: booking.id,
+        feedback: booking.feedback,
+      },
     };
   }
 }
